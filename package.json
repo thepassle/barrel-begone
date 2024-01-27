@@ -1,0 +1,20 @@
+{
+  "name": "barrel-begone",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "start": "node --watch index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "es-module-lexer": "^1.4.1",
+    "globby": "^14.0.0",
+    "resolve.exports": "^2.0.2",
+    "typescript": "^5.3.3"
+  }
+}

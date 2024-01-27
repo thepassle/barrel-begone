@@ -1,0 +1,1 @@
+export const var2 = 2;
