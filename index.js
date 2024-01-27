@@ -1,9 +1,11 @@
 import fs from 'fs';
 import path from 'path';
-import { globbySync } from 'globby';
-import * as resolve from 'resolve.exports';
+import { red, bold, yellow } from 'kleur/colors';
+
 import ts from 'typescript';
-import { hasNamedExports, isReexport } from './ast/exports.js';
+import { findDependencies } from './find-dependencies.js';
+import { gatherFilesFromPackageExports } from './package-exports.js';
+import { analyzeFile } from './analyze-file.js';
 
 /**
  * @TODOS
@@ -13,7 +15,11 @@ import { hasNamedExports, isReexport } from './ast/exports.js';
  * - It would also be cool to see if an entrypoint imports from another barrel file, perhaps in a dependency, or even internally, like this example in MSW: https://github.com/mswjs/msw/pull/1987/files
  */
 
-async function main({ cwd = process.cwd() } = {}) {
+async function main({ 
+  cwd = process.cwd(),
+  maxModuleGraphSize = 10,
+} = {}) {
+  console.log("\n🛢️ BARREL BEGONE 🛢️\n")
   const packageJsonPath = path.join(cwd, 'package.json');
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8').toString());
 
@@ -21,122 +27,29 @@ async function main({ cwd = process.cwd() } = {}) {
     throw new Error(`package.json does not have a "exports" field`);
   }
 
-  const files = gatherFilesFromPackageExports(packageJson.exports, { cwd });
+  const files = gatherFilesFromPackageExports(packageJson.exports, { cwd }).filter(f => !f.includes('package.json'));
+  console.log('Analyzing the following entrypoints based on the "exports" field in package.json:');
+  files.forEach(file => console.log(`- ${file}`));
+  console.log();
 
   for (const file of files) {
     const filePath = path.join(cwd, file);
+    const dependencies = await findDependencies([filePath], { basePath: cwd });
+
+    if (dependencies.length > maxModuleGraphSize) {
+      console.log(`${bold(yellow('[WARNING]'))}: "${filePath}" leads to a module graph of ${dependencies.length} modules, which is more than the allowed maxModuleGraphSize of ${maxModuleGraphSize}.`);
+    }
+
     const source = ts.createSourceFile(filePath, fs.readFileSync(filePath, 'utf8'), ts.ScriptTarget.ES2015, true);
-    const { exports, declarations } = analyze(source, filePath);
+    const { exports, declarations } = analyzeFile(source, filePath);
 
     if (exports > declarations) {
-      console.log(`[WARNING] "${filePath}" is a barrel file.`);
+      console.log(`${bold(red('[FAIL]'))}: "${filePath}" is a barrel file.`);
     }
   }
 }
 
-/**
- * Count the amount of exports and declarations in a source file
- * If a file has more exports than declarations, its a barrel file
- */
-function analyze(source, file) {
-  let exports = 0;
-  let declarations = 0;
-
-  ts.forEachChild(source, (node) => {
-    if (node.kind === ts.SyntaxKind.ExportDeclaration) {
-      /**
-       * @example export { var1, var2 };
-       */
-      if (hasNamedExports(node) && !isReexport(node)) {
-        exports += node.exportClause?.elements?.length;
-      }  
-      /**
-       * @example export * from 'foo';
-       * @example export * from './my-module.js';
-       */
-      else if (isReexport(node) && !hasNamedExports(node)) {
-        console.log(`[WARNING]: "${file}" reexports all exports from "${node.moduleSpecifier.text}", this should be avoided because it leads to unused imports, and makes it more difficult to tree-shake correctly.`);
-        exports++;
-      }
-
-      /**
-       * @example export { var1, var2 } from 'foo';
-       * @example export { var1, var2 } from './my-module.js';
-       */
-      else if (isReexport(node) && hasNamedExports(node)) {
-        exports += node.exportClause?.elements?.length;
-      }
-    }      
-    /**
-    * @example export default { var1, var };
-    */
-    else if (
-      node.kind === ts.SyntaxKind.ExportAssignment && 
-      node.expression.kind === ts.SyntaxKind.ObjectLiteralExpression
-    ) {
-      exports += node.expression.properties.length;
-    }
-
-    if (
-      ts.isVariableStatement(node) ||
-      ts.isFunctionDeclaration(node) ||
-      ts.isClassDeclaration(node)
-    ) {
-      declarations++;
-    }
-  });
-
-  return { exports, declarations };
-}
-
-/**
- * Gather all accessible files based on the "exports" object in package.json
- * @param {string | object} exports
- * @returns {string[]}
- */
-function gatherFilesFromPackageExports(exports, { cwd }) {
-  /**
-   * @example "exports": "./index.js"
-   */
-  if (typeof exports === 'string') {
-    return [exports];
-  }
-
-  /**
-   * If a key doesn't start with a ".", then it's a condition
-   * @example "exports": { "default": "./index.js" }
-   */
-  const isExportCondition = Object.keys(exports).every(key => !key.startsWith('.'));
-  if (isExportCondition) {
-    return resolve.exports({exports});
-  }
-
-  const filePaths = [];
-  for (const [key, value] of Object.entries(exports)) {
-    /**
-     * @example "exports": { "./foo/*": null }
-     */
-    if (value === null) {
-      continue;
-    }
-    /**
-     * @example "exports": { "./foo/*": "./foo/bar/*.js" }
-     */
-    else if (key.includes('*')) {
-      const placeholders = resolve.exports({exports}, key.replaceAll('*', '<PLACEHOLDER>'));
-      for (const placeholder of placeholders) {
-        const glob = placeholder.replaceAll('<PLACEHOLDER>', '*');
-        const paths = globbySync(glob, { cwd });
-        filePaths.push(...paths);
-      }
-    } else {
-      filePaths.push(...resolve.exports({exports}, key));
-    }
-  }
-
-  return filePaths;
-}
-
+// main();
 main({
   cwd: path.join(process.cwd(), 'fixtures/barrel')
 });
