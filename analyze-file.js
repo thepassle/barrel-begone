@@ -1,5 +1,4 @@
 import ts from 'typescript';
-import { red, bold, yellow } from 'kleur/colors';
 
 const has = arr => Array.isArray(arr) && arr.length > 0;
 
@@ -41,7 +40,8 @@ function hasAggregatingImport(node) {
  * Count the amount of exports and declarations in a source file
  * If a file has more exports than declarations, its a barrel file
  */
-export function analyzeFile(source, file, diagnostics) {
+export function analyzeFile(source, file) {
+  const diagnostics = [];
   let exports = 0;
   let declarations = 0;
 
@@ -50,7 +50,7 @@ export function analyzeFile(source, file, diagnostics) {
      * @example import * as name from './my-module.js'; 
      */
     if (hasAggregatingImport(node)) {
-      diagnostics[file].push({
+      diagnostics.push({
         id: 'import-all',
         level: 'warning',
         message: `"${file}" contains an aggregating import, importing * from "${node.moduleSpecifier.text}", this should be avoided because it leads to unused imports, and makes it more difficult to tree-shake correctly.`,
@@ -74,7 +74,7 @@ export function analyzeFile(source, file, diagnostics) {
        */
       else if (isReexport(node) && !hasNamedExports(node)) {
         // @TODO do the same for import * as foo from 'foo'?
-        diagnostics[file].push({
+        diagnostics.push({
           level: 'warning',
           id: 're-export-all',
           message: `"${file}" re-exports all exports from "${node.moduleSpecifier.text}", this should be avoided because it leads to unused imports, and makes it more difficult to tree-shake correctly.`,
@@ -114,12 +114,12 @@ export function analyzeFile(source, file, diagnostics) {
   });
 
   if(exports > declarations) {
-    diagnostics[file].unshift({
+    diagnostics.unshift({
       id: 'barrel-file',
       level: 'error',
       message: `"${file}" is a barrel file.`,
     });
   }
 
-  return { exports, declarations };
+  return { diagnostics, exports, declarations };
 }

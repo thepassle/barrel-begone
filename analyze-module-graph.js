@@ -1,28 +1,63 @@
+import ts from "typescript";
 import { rollup } from "rollup";
+import { nodeResolve } from '@rollup/plugin-node-resolve';
+import { analyzeFile } from "./analyze-file.js";
 
-/**
- * @param {Set<string>} resultSet
- * @returns {Plugin}
- */
-function rollupImportAnalyzerPlugin(resultSet) {
-  let buildOptions;
+export default function analyzeModuleGraphPlugin(context, diagnostics) {
+  const barrelFiles = [];
+  
   return {
-    name: "import-analyzer",
-    buildStart(options) {
-      buildOptions = options;
-    },
-    async resolveId(source, importer) {
-      const resolvedModule = await this.resolve(source, importer);
+    name: "analyze-module-graph",
+    transform(code, id) {
+      const source = ts.createSourceFile(id, code, ts.ScriptTarget.ES2015, true);
 
-      if (!buildOptions.input.includes(source)) {
-        resultSet.add({
-          importPath: source,
-          modulePath: resolvedModule.id,
-          importer,
+      const { diagnostics: fileDiagnostics } = analyzeFile(source, id, diagnostics);
+      if (fileDiagnostics.find(d => d.id === 'barrel-file')) {
+        if (id !== context.currentFile) {
+          barrelFiles.push(id);
+        }
+      }
+    },
+
+    buildEnd() {
+      const moduleInfoMap = new Map();
+      const moduleIds = Array.from(this.getModuleIds());
+      const graphSize = moduleIds.length;
+
+      if(graphSize > context.options.maxModuleGraphSize) {
+        diagnostics[context.currentFile].unshift({
+          id: 'module-graph-size',
+          level: 'error',
+          message: `"${context.currentFile}" leads to a module graph of ${graphSize} modules, which is more than the allowed maxModuleGraphSize of ${context.options.maxModuleGraphSize}.`
         });
       }
 
-      return resolvedModule.id;
+      // Map all modules by their IDs
+      for (const moduleId of moduleIds) {
+        moduleInfoMap.set(moduleId, this.getModuleInfo(moduleId));
+      }
+
+      const traceImports = (moduleId, chain = []) => {
+        const moduleInfo = moduleInfoMap.get(moduleId);
+        if (moduleInfo && moduleInfo.importers.length) {
+          return moduleInfo.importers.flatMap((importer) =>
+            traceImports(importer, [moduleId, ...chain])
+          );
+        }
+        return [[moduleId, ...chain]];
+      };
+
+      barrelFiles.forEach((barrelFile) => {
+        if (moduleInfoMap.has(barrelFile)) {
+          const importChains = traceImports(barrelFile);
+          diagnostics[context.currentFile].push({
+            id: 'barrel-file',
+            level: 'error',
+            message: `"${context.currentFile}" leads to an import for "${barrelFile}", which is a barrel file. 
+  It is imported by ${importChains.length} modules, via the following import chains: ${JSON.stringify(importChains, null, 2)}`,
+          });
+        }
+      });
     },
   };
 }
@@ -31,13 +66,12 @@ function rollupImportAnalyzerPlugin(resultSet) {
  * @param {string} entrypoint
  * @return {Promise<Set<string>>}
  */
-export async function flushImports(entrypoint) {
-  const imports = new Set();
-
+export async function analyzeModuleGraph(entrypoint, context, diagnostics) {
   await rollup({
     input: entrypoint,
-    plugins: [rollupImportAnalyzerPlugin(imports)],
+    plugins: [
+      nodeResolve(),
+      analyzeModuleGraphPlugin(context, diagnostics)
+    ],
   });
-
-  return imports;
 }
