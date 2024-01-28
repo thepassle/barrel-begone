@@ -90,13 +90,14 @@ export default function analyzeModuleGraphPlugin(context, diagnostics) {
   };
 }
 
-/**
- * @param {string} entrypoint
- * @return {Promise<Set<string>>}
- */
 export async function analyzeModuleGraph(entrypoint, context, diagnostics) {
   await rollup({
     input: entrypoint,
+    onLog(level, log, handler) {
+      if (!['THIS_IS_UNDEFINED'].includes(log.code)) {
+        handler(level, log);
+      }
+    },  
     plugins: [nodeResolve(), analyzeModuleGraphPlugin(context, diagnostics)],
   });
 }
