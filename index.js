@@ -8,22 +8,11 @@ import { gatherFilesFromPackageExports } from './package-exports.js';
 import { analyzeFile } from './analyze-file.js';
 
 /**
- * @TODOS
- * - It would also be cool to crawl the module graph, and see how many imports a given entrypoint file will lead to. 
- *    E.g.: importing 'foo' leads to 100 other modules being imported
- *    We can probably use something similar to this for that: https://github.com/open-wc/custom-elements-manifest/blob/master/packages/find-dependencies/src/find-dependencies.js
- * - It would also be cool to see if an entrypoint imports from another barrel file, perhaps in a dependency, or even internally, like this example in MSW: https://github.com/mswjs/msw/pull/1987/files
- * 
- * - Barrel file minimal amount of exports treshold
- */
-
-
-
-/**
  * @typedef {{
  *  level: 'error' | 'warning' | 'info';
  *  message: string;
  *  id: 'barrel-file' | 're-export-all' | 'import-all' | 'module-graph-size';
+ *  data?: any;
  *  loc?: {
  *   start: number,
  *   end: number
@@ -42,6 +31,7 @@ import { analyzeFile } from './analyze-file.js';
 async function main({ 
   cwd = process.cwd(),
   maxModuleGraphSize = 1,
+  amountOfExportsToConsiderModuleAsBarrel = 2
 } = {}) {
   /**
    * @type {{[key: string]: Diagnostic[]}}
@@ -53,6 +43,7 @@ async function main({
     options: {
       cwd,
       maxModuleGraphSize,
+      amountOfExportsToConsiderModuleAsBarrel
     }
   }
 
@@ -79,7 +70,9 @@ async function main({
     await analyzeModuleGraph(filePath, context, diagnostics);
 
     const source = ts.createSourceFile(filePath, fs.readFileSync(filePath, 'utf8'), ts.ScriptTarget.ES2015, true);
-    const { diagnostics: d } = analyzeFile(source, filePath);
+    const { diagnostics: d } = analyzeFile(source, filePath, {
+      amountOfExportsToConsiderModuleAsBarrel: context.options.amountOfExportsToConsiderModuleAsBarrel,
+    });
     diagnostics[filePath].unshift(...d);
 
     for (const diagnostic of diagnostics[filePath]) {
@@ -96,7 +89,7 @@ async function main({
   return diagnostics;
 }
 
-// main();
-main({
-  cwd: path.join(process.cwd(), 'fixtures/barrel')
-});
+main();
+// main({
+//   cwd: path.join(process.cwd(), 'fixtures/barrel')
+// });

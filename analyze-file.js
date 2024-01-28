@@ -40,7 +40,7 @@ function hasAggregatingImport(node) {
  * Count the amount of exports and declarations in a source file
  * If a file has more exports than declarations, its a barrel file
  */
-export function analyzeFile(source, file) {
+export function analyzeFile(source, file, options) {
   const diagnostics = [];
   let exports = 0;
   let declarations = 0;
@@ -104,8 +104,11 @@ export function analyzeFile(source, file) {
       exports += node.expression.properties.length;
     }
 
+    if (ts.isVariableStatement(node)) {
+      declarations += node.declarationList.declarations.length;
+    }
+
     if (
-      ts.isVariableStatement(node) ||
       ts.isFunctionDeclaration(node) ||
       ts.isClassDeclaration(node)
     ) {
@@ -113,7 +116,7 @@ export function analyzeFile(source, file) {
     }
   });
 
-  if(exports > declarations) {
+  if(exports > declarations && exports > options.amountOfExportsToConsiderModuleAsBarrel) {
     diagnostics.unshift({
       id: 'barrel-file',
       level: 'error',
