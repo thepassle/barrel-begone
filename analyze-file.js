@@ -23,6 +23,20 @@ function isReexport(node) {
   return false;
 }
 
+/** 
+ * @example import {namedA, namedB} from 'foo'; 
+ */
+function hasNamedImport(node) {
+  return has(node?.importClause?.namedBindings?.elements);
+}
+
+/** 
+ * @example import * as name from './my-module.js'; 
+ */
+function hasAggregatingImport(node) {
+  return !!node?.importClause?.namedBindings?.name && !hasNamedImport(node);
+}
+
 /**
  * Count the amount of exports and declarations in a source file
  * If a file has more exports than declarations, its a barrel file
@@ -32,6 +46,13 @@ export function analyzeFile(source, file) {
   let declarations = 0;
 
   ts.forEachChild(source, (node) => {
+    /**
+     * @example import * as name from './my-module.js'; 
+     */
+    if (hasAggregatingImport(node)) {
+      console.log(`${bold(yellow('[WARNING]'))}: "${file}" contains an aggregating import, importing * from "${node.moduleSpecifier.text}", this should be avoided because it leads to unused imports, and makes it more difficult to tree-shake correctly.`);
+    }
+
     if (node.kind === ts.SyntaxKind.ExportDeclaration) {
       /**
        * @example export { var1, var2 };
@@ -45,7 +66,7 @@ export function analyzeFile(source, file) {
        */
       else if (isReexport(node) && !hasNamedExports(node)) {
         // @TODO do the same for import * as foo from 'foo'?
-        console.log(`${bold(yellow('[WARNING]'))}: "${file}" reexports all exports from "${node.moduleSpecifier.text}", this should be avoided because it leads to unused imports, and makes it more difficult to tree-shake correctly.`);
+        console.log(`${bold(yellow('[WARNING]'))}: "${file}" re-exports all exports from "${node.moduleSpecifier.text}", this should be avoided because it leads to unused imports, and makes it more difficult to tree-shake correctly.`);
         exports++;
       }
 

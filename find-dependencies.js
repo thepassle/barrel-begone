@@ -130,8 +130,6 @@ export async function findDependencies(paths, options = {}) {
             dependencies.add(pathToDependency);
           }
         } catch(e) {
-          console.log(222, e);
-
           console.log(`Failed to resolve dependency "${i.n}".`, e.stack);
         }
       });
