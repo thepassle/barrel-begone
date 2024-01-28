@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { red, bold, yellow } from 'kleur/colors';
-
+import { legacy } from 'resolve.exports';
 import ts from 'typescript';
 import { analyzeModuleGraph } from './analyze-module-graph.js';
 import { gatherFilesFromPackageExports } from './package-exports.js';
@@ -51,11 +51,15 @@ async function main({
   const packageJsonPath = path.join(cwd, 'package.json');
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8').toString());
 
-  if (!packageJson.exports) {
-    throw new Error(`package.json does not have a "exports" field`);
+  let files = [];
+  if (packageJson.exports) {
+    files = gatherFilesFromPackageExports(packageJson.exports, { cwd }).filter(f => !f.value.includes('package.json'));
+    console.log('Analyzing the following entrypoints based on the "exports" field in package.json:');
+  } else {
+    files = [legacy(packageJson, { cwd })];
+    console.log('Analyzing the following entrypoints based on either the "module" or "main" field in package.json:');
   }
 
-  const files = gatherFilesFromPackageExports(packageJson.exports, { cwd }).filter(f => !f.value.includes('package.json'));
   console.log('Analyzing the following entrypoints based on the "exports" field in package.json:');
   files.forEach(({key, value}) => console.log(`- "${key}": "${value}"`));
   console.log();
