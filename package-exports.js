@@ -5,14 +5,14 @@ import { RESOLVE_EXPORTS_OPTIONS } from './utils.js';
 /**
  * Gather all accessible files based on the "exports" object in package.json
  * @param {string | object} exports
- * @returns {string[]}
+ * @returns {{key: string, value: string}[]}
  */
 export function gatherFilesFromPackageExports(exports, { cwd }) {
   /**
    * @example "exports": "./index.js"
    */
   if (typeof exports === 'string') {
-    return [exports];
+    return [{key: '.', value: exports}];
   }
 
   /**
@@ -21,7 +21,7 @@ export function gatherFilesFromPackageExports(exports, { cwd }) {
    */
   const isExportCondition = Object.keys(exports).every(key => !key.startsWith('.'));
   if (isExportCondition) {
-    return resolve.exports({exports});
+    return [{ key: '.', value: resolve.exports({exports})[0]}];
   }
 
   const filePaths = [];
@@ -41,7 +41,7 @@ export function gatherFilesFromPackageExports(exports, { cwd }) {
       for (const placeholder of placeholders) {
         const glob = placeholder.replaceAll('<PLACEHOLDER>', '*');
         const paths = globbySync(glob, { cwd });
-        filePaths.push(...paths);
+        filePaths.push({key, value: paths[0]});
       }
     } else {
       try {
@@ -49,10 +49,10 @@ export function gatherFilesFromPackageExports(exports, { cwd }) {
           conditions: ["import", "default"],
           browser: true,
         });
-        filePaths.push(...r);
+        filePaths.push({key, value: r[0]})
       } catch {
         const r = resolve.exports({exports}, key);
-        filePaths.push(...r);
+        filePaths.push({key, value: r[0]})
       }
     }
   }

@@ -41,7 +41,7 @@ function hasAggregatingImport(node) {
  * Count the amount of exports and declarations in a source file
  * If a file has more exports than declarations, its a barrel file
  */
-export function analyzeFile(source, file) {
+export function analyzeFile(source, file, diagnostics) {
   let exports = 0;
   let declarations = 0;
 
@@ -50,7 +50,15 @@ export function analyzeFile(source, file) {
      * @example import * as name from './my-module.js'; 
      */
     if (hasAggregatingImport(node)) {
-      console.log(`${bold(yellow('[WARNING]'))}: "${file}" contains an aggregating import, importing * from "${node.moduleSpecifier.text}", this should be avoided because it leads to unused imports, and makes it more difficult to tree-shake correctly.`);
+      diagnostics[file].push({
+        id: 'import-all',
+        level: 'warning',
+        message: `"${file}" contains an aggregating import, importing * from "${node.moduleSpecifier.text}", this should be avoided because it leads to unused imports, and makes it more difficult to tree-shake correctly.`,
+        loc: {
+          start: node.getStart(),
+          end: node.getEnd(),
+        }
+      });
     }
 
     if (node.kind === ts.SyntaxKind.ExportDeclaration) {
@@ -66,7 +74,15 @@ export function analyzeFile(source, file) {
        */
       else if (isReexport(node) && !hasNamedExports(node)) {
         // @TODO do the same for import * as foo from 'foo'?
-        console.log(`${bold(yellow('[WARNING]'))}: "${file}" re-exports all exports from "${node.moduleSpecifier.text}", this should be avoided because it leads to unused imports, and makes it more difficult to tree-shake correctly.`);
+        diagnostics[file].push({
+          level: 'warning',
+          id: 're-export-all',
+          message: `"${file}" re-exports all exports from "${node.moduleSpecifier.text}", this should be avoided because it leads to unused imports, and makes it more difficult to tree-shake correctly.`,
+          loc: {
+            start: node.getStart(),
+            end: node.getEnd(),
+          }
+        });
         exports++;
       }
 
@@ -96,6 +112,14 @@ export function analyzeFile(source, file) {
       declarations++;
     }
   });
+
+  if(exports > declarations) {
+    diagnostics[file].unshift({
+      id: 'barrel-file',
+      level: 'error',
+      message: `"${file}" is a barrel file.`,
+    });
+  }
 
   return { exports, declarations };
 }
