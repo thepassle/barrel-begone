@@ -1,6 +1,6 @@
 {
   "name": "barrel-begone",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "",
   "main": "index.js",
   "type": "module",
@@ -12,7 +12,8 @@
     "barrel-begone": "./cli.js"
   },
   "exports": {
-    ".": "./index.js"
+    ".": "./index.js",
+    "./analyze-file.js": "./analyze-file.js"
   },
   "keywords": [],
   "author": "",
