@@ -74,7 +74,14 @@ export async function barrelBegone(programmaticConfig = {}) {
     files = gatherFilesFromPackageExports(packageJson.exports, { cwd: context.options.cwd }).filter(f => !f.value.includes('package.json'));
     console.log('Analyzing the following entrypoints based on the "exports" field in package.json:');
   } else {
-    files = [{key: '.', value: legacy(packageJson, { cwd: context.options.cwd })}];
+    const value = legacy(packageJson, { cwd: context.options.cwd });
+    files = [{key: '.', value}];
+
+    if (value === undefined) {
+      console.log(`No entrypoints found in the "module", "main", or "exports" field, exiting...`);
+      return;
+    }
+
     console.log('Analyzing the following entrypoints based on either the "module" or "main" field in package.json:');
   }
 
