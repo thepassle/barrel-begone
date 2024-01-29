@@ -1,5 +1,4 @@
 {
-  "exports": {
-    ".": "./index.js"
-  }
+
+  "main": "./index.js"
 }
