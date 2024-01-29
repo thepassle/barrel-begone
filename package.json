@@ -1,6 +1,6 @@
 {
   "name": "barrel-begone",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "",
   "main": "index.js",
   "type": "module",
@@ -8,12 +8,20 @@
     "start": "node --watch index.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "bin": {
+    "barrel-begone": "./cli.js"
+  },
+  "exports": {
+    ".": "./index.js"
+  },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "@custom-elements-manifest/find-dependencies": "^0.0.5",
     "@rollup/plugin-node-resolve": "^15.2.3",
+    "@web/config-loader": "^0.3.1",
+    "command-line-args": "^5.2.1",
     "es-module-lexer": "^1.4.1",
     "globby": "^14.0.0",
     "kleur": "^4.1.5",

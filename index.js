@@ -1,11 +1,16 @@
 import fs from 'fs';
 import path from 'path';
-import { red, bold, yellow } from 'kleur/colors';
+import { red, bold, yellow, underline } from 'kleur/colors';
 import { legacy } from 'resolve.exports';
 import ts from 'typescript';
 import { analyzeModuleGraph } from './analyze-module-graph.js';
 import { gatherFilesFromPackageExports } from './package-exports.js';
 import { analyzeFile } from './analyze-file.js';
+import {
+  DEFAULTS,
+  getCliConfig,
+  getUserConfig,
+} from './config.js';
 
 /**
  * @typedef {{
@@ -23,51 +28,61 @@ import { analyzeFile } from './analyze-file.js';
  *  currentFile: string,
  *  options: {
  *   cwd: string,
- *   maxModuleGraphSize: number
+ *   maxModuleGraphSize: number,
+ *   amountOfExportsToConsiderModuleAsBarrel: number,
+ *   info: boolean,
+ *   rollup: object
  *  }
  * }} Context
  */
 
-async function main({ 
-  cwd = process.cwd(),
-  maxModuleGraphSize = 1,
-  amountOfExportsToConsiderModuleAsBarrel = 2
-} = {}) {
+export async function barrelBegone(programmaticConfig = {}) {
+
+  const cliConfig = getCliConfig(process.argv);
+  const userConfig = await getUserConfig(
+    cliConfig?.cwd ?? DEFAULTS.cwd
+  );
+
+
+  /** Merged config, CLI args overrule userConfig, programmatic options overrule everything */
+  const finalOptions = {
+    ...DEFAULTS,
+    ...userConfig,
+    ...cliConfig,
+    ...programmaticConfig,
+  };
+
   /**
    * @type {{[key: string]: Diagnostic[]}}
    */
   const diagnostics = {};
+
   /** @type {Context} */
   const context = {
     currentFile: '',
     options: {
-      cwd,
-      maxModuleGraphSize,
-      amountOfExportsToConsiderModuleAsBarrel
+      ...finalOptions
     }
   }
 
-  console.log("\n🛢️ BARREL BEGONE 🛢️\n")
-  const packageJsonPath = path.join(cwd, 'package.json');
+  console.log(bold("\n🛢️ BARREL BEGONE 🛢️\n"));
+  const packageJsonPath = path.join(context.options.cwd, 'package.json');
   const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8').toString());
 
   let files = [];
   if (packageJson.exports) {
-    files = gatherFilesFromPackageExports(packageJson.exports, { cwd }).filter(f => !f.value.includes('package.json'));
+    files = gatherFilesFromPackageExports(packageJson.exports, { cwd: context.options.cwd }).filter(f => !f.value.includes('package.json'));
     console.log('Analyzing the following entrypoints based on the "exports" field in package.json:');
   } else {
-    files = [legacy(packageJson, { cwd })];
+    files = [legacy(packageJson, { cwd: context.options.cwd })];
     console.log('Analyzing the following entrypoints based on either the "module" or "main" field in package.json:');
   }
 
-  console.log('Analyzing the following entrypoints based on the "exports" field in package.json:');
-  files.forEach(({key, value}) => console.log(`- "${key}": "${value}"`));
+  files.forEach(({key, value}) => console.log(`- "${bold(key)}": "${underline(bold(value))}"`));
   console.log();
 
   for (const {_, value} of files) {
-    console.log(`${bold(value)}:`)
-    
-    const filePath = path.join(cwd, value);
+    const filePath = path.join(context.options.cwd, value);
     context.currentFile = filePath;
     diagnostics[filePath] = [];
 
@@ -78,6 +93,13 @@ async function main({
       amountOfExportsToConsiderModuleAsBarrel: context.options.amountOfExportsToConsiderModuleAsBarrel,
     });
     diagnostics[filePath].unshift(...d);
+
+    if (diagnostics[filePath].length) {
+      console.log('\n❌' + ' ' + bold(value));
+    } else {
+      console.log('\n✅' + ' ' + bold(value));
+      console.log(`  No issues found.`);
+    }
 
     for (const diagnostic of diagnostics[filePath]) {
       if (diagnostic.level === 'error') {
@@ -92,8 +114,3 @@ async function main({
 
   return diagnostics;
 }
-
-main();
-// main({
-//   cwd: path.join(process.cwd(), 'fixtures/barrel')
-// });

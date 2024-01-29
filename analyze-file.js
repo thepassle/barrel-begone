@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { bold, underline } from 'kleur/colors';
 
 const has = arr => Array.isArray(arr) && arr.length > 0;
 
@@ -53,7 +54,7 @@ export function analyzeFile(source, file, options) {
       diagnostics.push({
         id: 'import-all',
         level: 'warning',
-        message: `"${file}" contains an aggregating import, importing * from "${node.moduleSpecifier.text}", this should be avoided because it leads to unused imports, and makes it more difficult to tree-shake correctly.`,
+        message: `"${underline(bold(file))}" contains an aggregating import, importing * from "${underline(bold(node.moduleSpecifier.text))}", this should be avoided because it leads to unused imports, and makes it more difficult to tree-shake correctly.`,
         loc: {
           start: node.getStart(),
           end: node.getEnd(),
@@ -77,7 +78,7 @@ export function analyzeFile(source, file, options) {
         diagnostics.push({
           level: 'warning',
           id: 're-export-all',
-          message: `"${file}" re-exports all exports from "${node.moduleSpecifier.text}", this should be avoided because it leads to unused imports, and makes it more difficult to tree-shake correctly.`,
+          message: `"${underline(bold(file))}" re-exports all exports from "${underline(bold(node.moduleSpecifier.text))}", this should be avoided because it leads to unused imports, and makes it more difficult to tree-shake correctly.`,
           loc: {
             start: node.getStart(),
             end: node.getEnd(),
@@ -93,7 +94,7 @@ export function analyzeFile(source, file, options) {
       else if (isReexport(node) && hasNamedExports(node)) {
         exports += node.exportClause?.elements?.length;
       }
-    }      
+    }
     /**
     * @example export default { var1, var };
     */
@@ -120,7 +121,7 @@ export function analyzeFile(source, file, options) {
     diagnostics.unshift({
       id: 'barrel-file',
       level: 'error',
-      message: `"${file}" is a barrel file.`,
+      message: `"${underline(bold(file))}" is a barrel file.`,
     });
   }
 

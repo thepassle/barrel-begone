@@ -2,16 +2,20 @@ import ts from "typescript";
 import { rollup } from "rollup";
 import { nodeResolve } from "@rollup/plugin-node-resolve";
 import { analyzeFile } from "./analyze-file.js";
-import { bold } from "kleur/colors";
+import { bold, underline } from "kleur/colors";
 
 function format(arrayOfArrays) {
   let result = "";
 
   arrayOfArrays.forEach((subArray, i) => {
     subArray.forEach((element, index) => {
-      result += " ".repeat(2 * index) + (index == 0 ? bold(`#${i+1}: ${element}`) : element) + "\n";
+      if (index == 0) {
+        result += bold(`\n    - #${i+1}: ${element}\n`);
+      } else {
+        result += "          "+" ".repeat(2 * index) + element + "\n";
+      }
     });
-    result += "\n";
+    // result += "\n";
   });
 
   return result.trim();
@@ -53,7 +57,7 @@ export default function analyzeModuleGraphPlugin(context, diagnostics) {
         diagnostics[context.currentFile].unshift({
           id: "module-graph-size",
           level: "error",
-          message: `"${context.currentFile}" leads to a module graph of ${graphSize} modules, which is more than the allowed maxModuleGraphSize of ${context.options.maxModuleGraphSize}.`,
+          message: `"${underline(bold(context.currentFile))}" leads to a module graph of ${bold(graphSize)} modules, which is more than the allowed maxModuleGraphSize of ${bold(context.options.maxModuleGraphSize)}.`,
         });
       }
 
@@ -75,14 +79,19 @@ export default function analyzeModuleGraphPlugin(context, diagnostics) {
       barrelFiles.forEach((barrelFile) => {
         if (moduleInfoMap.has(barrelFile)) {
           const importChains = traceImports(barrelFile);
+
+          const message = context.options.info 
+            ? `It is imported by ${bold(importChains.length)} modules, via the following import chains: \n${format(importChains)}\n`
+            : `          It is imported by ${bold(importChains.length)} modules, to display the import chains, run with the ${bold("--info")} flag.`;
+
           diagnostics[context.currentFile].push({
             id: "barrel-file",
             level: "error",
             data: importChains,
             message: `"${
-              context.currentFile
-            }" leads to an import for "${barrelFile}", which is a barrel file. 
-  It is imported by ${importChains.length} modules, via the following import chains: \n\n${format(importChains)}\n`,
+              underline(bold(context.currentFile))
+            }" leads to an import for "${underline(bold(barrelFile))}", which is a barrel file. 
+  ${message}`,
           });
         }
       });
@@ -98,6 +107,11 @@ export async function analyzeModuleGraph(entrypoint, context, diagnostics) {
         handler(level, log);
       }
     },  
-    plugins: [nodeResolve(), analyzeModuleGraphPlugin(context, diagnostics)],
+    ...context.options.rollup,
+    plugins: [
+      ...(context.options.rollup?.plugins || []),
+      nodeResolve(), 
+      analyzeModuleGraphPlugin(context, diagnostics)
+    ],
   });
 }
