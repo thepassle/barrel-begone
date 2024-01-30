@@ -38,10 +38,14 @@ export function gatherFilesFromPackageExports(exports, { cwd }) {
      */
     else if (key.includes('*')) {
       const placeholders = resolve.exports({exports}, key.replaceAll('*', '<PLACEHOLDER>'), RESOLVE_EXPORTS_OPTIONS);
+
       for (const placeholder of placeholders) {
         const glob = placeholder.replaceAll('<PLACEHOLDER>', '*');
         const paths = globbySync(glob, { cwd });
-        filePaths.push({key, value: paths[0]});
+
+        for (const path of paths) {
+          filePaths.push({key, value: path});
+        }
       }
     } else {
       try {
